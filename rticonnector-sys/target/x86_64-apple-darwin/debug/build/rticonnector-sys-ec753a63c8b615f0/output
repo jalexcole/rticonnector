@@ -1,0 +1,6 @@
+cargo:rustc-link-search=native=lib/osx-x64
+cargo:rustc-link-lib=nddsc
+cargo:rustc-link-lib=nddscore
+cargo:rustc-link-lib=rtiddsconnector
+cargo:rustc-env=DYLD_LIBRARY_PATH=lib/osx-x64
+cargo:include=include
