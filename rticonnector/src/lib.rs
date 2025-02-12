@@ -5,42 +5,32 @@ use std::fmt::{write, Display};
 use std::ptr;
 use std::time::Duration;
 
-// use bindings::RTI_Connector_new;
-// use bindings::{
-//     RTI_Connector_clear, RTI_Connector_clear_member, RTI_Connector_get_boolean_from_sample,
-//     RTI_Connector_get_datawriter, RTI_Connector_get_native_sample,
-//     RTI_Connector_get_number_from_sample, RTI_Connector_get_sample_count,
-//     RTI_Connector_get_string_from_sample, RTI_Connector_read,
-//     RTI_Connector_set_max_objects_per_thread, RTI_Connector_take,
-//     RTI_Connector_wait_for_acknowledgments, RTI_Connector_wait_for_data_on_reader,
-//     RTI_Connector_wait_for_matched_publication, RTI_Connector_wait_for_matched_subscription,
-//     RTI_Connector_write,
-// };
-// use bindings::{
-//     RTI_Connector_delete, RTI_Connector_get_boolean_from_infos, RTI_Connector_get_datareader,
-//     RTI_Connector_get_json_from_infos, RTI_Connector_get_json_member,
-//     RTI_Connector_get_json_sample, RTI_Connector_get_last_error_message,
-//     RTI_Connector_get_matched_publications, RTI_Connector_set_boolean_into_samples,
-//     RTI_Connector_set_json_instance, RTI_Connector_set_number_into_samples,
-//     RTI_Connector_set_string_into_samples,
-// };
-
-// mod bindings;
-
-// use bindings::RTI_Connector_Options;
+pub mod core;
+pub mod domain;
+pub mod publisher;
+pub mod subscriber;
+pub mod topic;
+pub mod util;
 
 use rticonnector_sys::*;
+use thiserror::Error;
 
-pub type RTIOptions = RTI_Connector_Options;
+// pub type RTIOptions = RTI_Connector_Options;
+#[derive(Clone)]
+pub struct RTIOptions {
+    options: RTI_Connector_Options,
+}
 
-// impl Default for RTIOptions {
-//     fn default() -> Self {
-//         Self {
-//             enable_on_data_event: 1,
-//             one_based_sequence_indexing: 1,
-//         }
-//     }
-// }
+impl Default for RTIOptions {
+    fn default() -> Self {
+        Self {
+            options: RTI_Connector_Options {
+                enable_on_data_event: 1,
+                one_based_sequence_indexing: 1,
+            },
+        }
+    }
+}
 
 pub struct RTIConnector {
     connector: Option<*mut RTI_Connector>,
@@ -53,11 +43,20 @@ impl RTIConnector {
     ///
     /// Panics if .
     pub fn new(config_name: &str, config_file: &str, options: &[RTIOptions]) -> Self {
+        let rti_options: [RTI_Connector_Options; 128] = match options
+            .iter()
+            .map(|o| o.options)
+            .collect::<Vec<_>>()
+            .try_into()
+        {
+            Ok(options) => options,
+            Err(_) => panic!("Failed to convert options to array"),
+        };
         let connector = unsafe {
             RTI_Connector_new(
                 CString::new(config_name).unwrap().as_ptr(),
                 CString::new(config_file).unwrap().as_ptr(),
-                options.clone().as_ptr(),
+                rti_options.clone().as_ptr(),
             )
         };
         Self {
@@ -767,7 +766,6 @@ struct DynamicDataReader<'a> {
 }
 
 impl DynamicDataReader<'_> {
-    
     pub fn wait_for_data_on_reader(&self, timeout: Duration) -> Result<i32, String> {
         todo!()
     }
@@ -906,29 +904,6 @@ impl DynamicDataWriter<'_> {
     }
 }
 /// A sample of any complex data type, which can be inspected and manipulated reflectively.
-struct DynamicData;
-
-impl DynamicData {
-
-}
-
-struct DynamicDataInfo {
-
-}
-
-struct DynamicDataMemberInfo;
-struct DynamicDataProperty;
-
-
-struct DynamicDataSeq {
-
-}
-struct DynamicDataSerializationSupport {
-
-}
-struct DynamicDataTypeProperty {
-
-}
 
 #[derive(Debug, Clone, Copy)]
 pub enum DDSError {
@@ -940,14 +915,21 @@ pub enum DDSError {
 impl Error for DDSError {}
 
 // Error type for handling possible errors
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ConnectorError {
+    #[error("Error: Null pointer")]
     NullPointer,
+    #[error("Error: FFI Error")]
     FfiError,
+    #[error("Error: Field Not Boolean")]
     FieldNotBoolean,
+    #[error("Error: Field Not Found")]
     FieldNotFound,
+    #[error("Error: Sample Not Found")]
     SampleNotFound,
+    #[error("Error: Member Not Found")]
     MemberNotFound,
+    #[error("Error: Invalid String")]
     InvalidString,
 }
 
@@ -956,5 +938,3 @@ impl Display for DDSError {
         todo!()
     }
 }
-
-
