@@ -1,0 +1,11 @@
+[package]
+name = "connector-dds"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rticonnector = {path = "../rticonnector"}
+rticonnector-sys = {path = "../rticonnector-sys"}
+serde = "1.0.217"
+serde_json = "1.0.138"
+thiserror = "2.0.11"

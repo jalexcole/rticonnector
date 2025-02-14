@@ -64,6 +64,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "connector-dds"
+version = "0.1.0"
+dependencies = [
+ "rticonnector",
+ "rticonnector-sys",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -196,8 +207,6 @@ name = "rticonnector"
 version = "0.1.0"
 dependencies = [
  "rticonnector-sys",
- "serde",
- "serde_json",
  "thiserror",
 ]
 

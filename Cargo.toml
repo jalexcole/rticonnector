@@ -1,3 +1,3 @@
 
 [workspace]
-members = ["rticonnector-sys", "rticonnector"]
+members = ["rticonnector-sys", "rticonnector", "connector-dds"]

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rticonnector::RTIConnector;
+use rticonnector::Connector;
 
 
 
@@ -20,6 +20,6 @@ struct Triangle {
 fn main() {
     let shape_example_xml = Path::new("examples/ShapeExample.xml").to_str().unwrap();
 
-    let connector = RTIConnector::new("ShapeDemo", shape_example_xml, &[]);
+    let connector = Connector::new("ShapeDemo", shape_example_xml, &[]);
     
 }
