@@ -5,14 +5,16 @@ use std::fmt::{write, Display};
 use std::ptr;
 use std::time::Duration;
 
-// pub mod core;
-// pub mod domain;
-// pub mod publisher;
-// pub mod subscriber;
+pub mod core;
+pub mod domain;
+pub mod publisher;
+pub mod subscriber;
 pub mod topic;
 pub mod util;
 
+use publisher::DynamicDataWriter;
 use rticonnector_sys::*;
+use subscriber::DynamicDataReader;
 use thiserror::Error;
 
 // pub type RTIOptions = RTI_Connector_Options;
@@ -32,11 +34,11 @@ impl Default for RTIOptions {
     }
 }
 
-pub struct RTIConnector {
+pub struct Connector {
     connector: Option<*mut RTI_Connector>,
 }
 
-impl RTIConnector {
+impl Connector {
     /// Creates a new [`RTIConnector`].
     ///
     /// # Panics
@@ -665,6 +667,35 @@ impl RTIConnector {
         })
     }
 
+    /// Safe wrapper for `RTI_Connector_get_datawriter`
+    pub fn get_dynamic_datawriter(
+        &self,
+        entity_name: &str,
+    ) -> Result<DynamicDataWriter, &'static str> {
+        // Ensure the connector is not None (null pointer check)
+        let connector_ptr = self
+            .connector
+            .ok_or("Null pointer: RTI Connector instance does not exist.")?;
+
+        // Convert the entity name to a C string
+        let c_entity_name = CString::new(entity_name).map_err(|_| "Failed to create C string.")?;
+
+        // Call the unsafe FFI function
+        let datawriter_ptr = unsafe {
+            RTI_Connector_get_datawriter(connector_ptr as *mut c_void, c_entity_name.as_ptr())
+        };
+
+        // Check if the returned pointer is null
+        if datawriter_ptr.is_null() {
+            return Err("Failed to retrieve datawriter: returned null pointer.");
+        }
+
+        Ok(DynamicDataWriter {
+            connector: self,
+            data_writer: datawriter_ptr,
+        })
+    }
+
     /// Safe wrapper for `RTI_Connector_get_native_sample`
     pub fn get_native_sample(
         &self,
@@ -754,155 +785,12 @@ impl RTIConnector {
     }
 }
 
-impl Drop for RTIConnector {
+impl Drop for Connector {
     fn drop(&mut self) {
         self.delete();
     }
 }
 
-struct DynamicDataReader<'a> {
-    connector: &'a RTIConnector,
-    data_reader: *mut c_void,
-}
-
-impl DynamicDataReader<'_> {
-    pub fn wait_for_data_on_reader(&self, timeout: Duration) -> Result<i32, String> {
-        todo!()
-    }
-
-    /// Safe wrapper for `RTI_Connector_wait_for_matched_publication`
-    pub fn wait_for_matched_publication(&self, ms_timeout: i32) -> Result<i32, &'static str> {
-        // Ensure the reader pointer is not null
-        if self.data_reader.is_null() {
-            return Err("Null pointer: RTI data reader instance does not exist.");
-        }
-
-        // Variable to hold the new count of matched publications
-        let mut current_count_change: c_int = 0;
-
-        // Call the unsafe FFI function
-        let result = unsafe {
-            RTI_Connector_wait_for_matched_publication(
-                self.data_reader,
-                ms_timeout,
-                &mut current_count_change,
-            )
-        };
-
-        // Check if the function call was successful
-        if result != 0 {
-            return Err("Error waiting for matched publications or timeout occurred.");
-        }
-
-        Ok(current_count_change)
-    }
-
-    /// Safe Rust wrapper for `RTI_Connector_get_matched_publications`
-    pub fn get_matched_publications(&self) -> Result<String, String> {
-        let mut json_ptr: *mut c_char = ptr::null_mut();
-
-        // Call the unsafe FFI function
-        let result =
-            unsafe { RTI_Connector_get_matched_publications(self.data_reader, &mut json_ptr) };
-
-        // Check if the function call was successful
-        if result != 0 {
-            return Err(format!("Data writer error code: {}", result));
-        }
-
-        // Ensure the pointer is not null
-        if json_ptr.is_null() {
-            return Err("ConnectorError::NullPointer".to_string());
-        }
-
-        // Convert the C string to a Rust String
-        unsafe {
-            let c_str = CStr::from_ptr(json_ptr);
-            let json_str = c_str.to_string_lossy().into_owned();
-
-            // Free the memory if needed (depending on how the memory is managed in the FFI)
-            // For example: libc::free(json_ptr) or a corresponding RTI free function.
-
-            Ok(json_str)
-        }
-    }
-}
-
-struct DynamicDataWriter<'a> {
-    connector: &'a RTIConnector,
-    data_writer: *mut c_void,
-}
-
-impl DynamicDataWriter<'_> {
-    /// Safe wrapper for `RTI_Connector_wait_for_acknowledgments`
-    pub fn wait_for_acknowledgments(&self, timeout: i32) -> Result<i32, &'static str> {
-        // Call the unsafe FFI function
-        let new_count =
-            unsafe { RTI_Connector_wait_for_acknowledgments(self.data_writer, timeout) };
-
-        // Check if the function call was successful
-        if new_count < 0 {
-            return Err("Error waiting for acknowledgments.");
-        }
-
-        Ok(new_count)
-    }
-    /// Safe wrapper for `RTI_Connector_wait_for_matched_subscription`
-    pub fn wait_for_matched_subscription(&self, ms_timeout: i32) -> Result<i32, &'static str> {
-        // Ensure the writer pointer is not null
-        if self.data_writer.is_null() {
-            return Err("Null pointer: RTI data writer instance does not exist.");
-        }
-
-        // Variable to hold the new count of matched subscriptions
-        let mut current_count_change: c_int = 0;
-
-        // Call the unsafe FFI function
-        let result = unsafe {
-            RTI_Connector_wait_for_matched_subscription(
-                self.data_writer,
-                ms_timeout,
-                &mut current_count_change,
-            )
-        };
-
-        // Check if the function call was successful
-        if result != 0 {
-            return Err("Error waiting for matched subscriptions or timeout occurred.");
-        }
-
-        Ok(current_count_change)
-    }
-    /// Safe Rust wrapper for `RTI_Connector_get_matched_publications`
-    pub fn get_matched_publications(&self) -> Result<String, String> {
-        let mut json_ptr: *mut c_char = ptr::null_mut();
-
-        // Call the unsafe FFI function
-        let result =
-            unsafe { RTI_Connector_get_matched_publications(self.data_writer, &mut json_ptr) };
-
-        // Check if the function call was successful
-        if result != 0 {
-            return Err(format!("Data writer error code: {}", result));
-        }
-
-        // Ensure the pointer is not null
-        if json_ptr.is_null() {
-            return Err("ConnectorError::NullPointer".to_string());
-        }
-
-        // Convert the C string to a Rust String
-        unsafe {
-            let c_str = CStr::from_ptr(json_ptr);
-            let json_str = c_str.to_string_lossy().into_owned();
-
-            // Free the memory if needed (depending on how the memory is managed in the FFI)
-            // For example: libc::free(json_ptr) or a corresponding RTI free function.
-
-            Ok(json_str)
-        }
-    }
-}
 /// A sample of any complex data type, which can be inspected and manipulated reflectively.
 
 #[derive(Debug, Clone, Copy)]

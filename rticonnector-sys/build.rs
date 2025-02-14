@@ -18,7 +18,7 @@ fn main() {
     // Tell Cargo where to find the dynamic libraries
     println!("cargo:rustc-link-search=native={}", lib_path);
     println!("cargo:rustc-link-lib=nddsc");
-    println!("cargo:rustc-link-lib=nddscore");
+    println!("cargo:rustc-link-lib=libnddscore");
     println!("cargo:rustc-link-lib=rtiddsconnector");
 
     // Set the runtime library search path
