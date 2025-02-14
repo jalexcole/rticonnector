@@ -18,6 +18,4 @@ pub trait TopicType<'a>: Serialize + Deserialize<'a> + Sized{
     fn from_json(json: &'a str) -> serde_json::Result<Self> {
         serde_json::from_str::<Self>(json)
     }
-
-
 }

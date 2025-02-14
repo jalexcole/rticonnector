@@ -1,3 +1,11 @@
+//! This is a home made binding for the [rticonnextdds-connector](https://github.com/rticommunity/rticonnextdds-connector)
+//! The library is incomplete and will not catch all edge cases, and should
+//! be used at your own risk.
+//! This library was not written by RTI and is not endorsed by RTI.
+//!
+//! The ideals of this library is to provide a Rust interface to the C library
+//! without exposing any unsafe code,and nothing more.
+
 use std::ffi::CString;
 use std::ffi::{c_char, c_double, c_int, c_void, CStr};
 use std::ptr;
@@ -7,10 +15,20 @@ use rticonnector_sys::*;
 
 use thiserror::Error;
 
-// pub type RTIOptions = RTI_Connector_Options;
 #[derive(Clone)]
 pub struct RTIOptions {
     options: RTI_Connector_Options,
+}
+
+impl RTIOptions {
+    pub fn new(enable_on_data_event: bool, one_based_sequence_indexing: bool) -> Self {
+        Self {
+            options: RTI_Connector_Options {
+                enable_on_data_event: enable_on_data_event as i32,
+                one_based_sequence_indexing: one_based_sequence_indexing as i32,
+            },
+        }
+    }
 }
 
 impl Default for RTIOptions {
@@ -29,11 +47,10 @@ pub struct Connector {
 }
 
 impl Connector {
-    /// Creates a new [`RTIConnector`].
+    /// Creates a new [`Connector`].
     ///
-    /// # Panics
-    ///
-    /// Panics if .
+    /// Panics if the configuration file is not valid or `&[RTIOptions]`
+    /// exceeds a length of 128.
     pub fn new(config_name: &str, config_file: &str, options: &[RTIOptions]) -> Self {
         let rti_options: [RTI_Connector_Options; 128] = match options
             .iter()
@@ -48,7 +65,7 @@ impl Connector {
             RTI_Connector_new(
                 CString::new(config_name).unwrap().as_ptr(),
                 CString::new(config_file).unwrap().as_ptr(),
-                rti_options.clone().as_ptr(),
+                rti_options.as_ptr(),
             )
         };
         Self {
@@ -721,8 +738,16 @@ impl Connector {
         Ok(sample_ptr)
     }
 
-    pub fn wait_fo_data(&self, timeout: Duration) -> Result<i32, String> {
-        todo!()
+    pub fn wait_fo_data(&self, timeout: Duration) -> Result<i32, ConnectorError> {
+       let connector_ptr: *mut c_void = self.connector.unwrap() as *mut c_void;
+        let result = unsafe {
+            RTI_Connector_wait_for_data_on_reader(connector_ptr, timeout.as_millis() as c_int)
+        };
+        if result < 0 {
+            Err(ConnectorError::FfiError)
+        } else {
+            Ok(result)
+        }
     }
 
     /// Safe wrapper for `RTI_Connector_wait_for_data_on_reader`
@@ -746,22 +771,6 @@ impl Connector {
         }
 
         Ok(())
-    }
-
-    pub fn wait_for_matched_publication(
-        &mut self,
-        timeout: Duration,
-        current_count_change: &mut i32,
-    ) -> Result<i32, String> {
-        todo!()
-    }
-
-    pub fn wait_for_matched_subscription(
-        &mut self,
-        timeout: Duration,
-        current_count_change: &mut i32,
-    ) -> Result<i32, String> {
-        todo!()
     }
 
     pub fn get_last_error() -> String {
@@ -788,8 +797,19 @@ pub struct DynamicDataReader<'a> {
 }
 
 impl DynamicDataReader<'_> {
-    pub fn wait_for_data_on_reader(&self, timeout: Duration) -> Result<i32, String> {
-        todo!()
+    pub fn wait_for_data_on_reader(&self, timeout: Duration) -> Result<i32, ConnectorError> {
+       // Here we assume a similar pattern as in Connector.
+        if self.data_reader.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+        let result = unsafe {
+            RTI_Connector_wait_for_data_on_reader(self.data_reader, timeout.as_millis() as c_int)
+        };
+        if result != 0 {
+            Err(ConnectorError::FfiError)
+        } else {
+            Ok(result)
+        }
     }
 
     /// Safe wrapper for `RTI_Connector_wait_for_matched_publication`
@@ -849,6 +869,8 @@ impl DynamicDataReader<'_> {
         }
     }
 }
+
+
 
 pub struct DynamicDataWriter<'a> {
     pub(crate) connector: &'a Connector,

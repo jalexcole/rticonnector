@@ -6,6 +6,12 @@ use rticonnector_sys::{RTI_Connector_get_matched_publications, RTI_Connector_wai
 use crate::topic::TopicType;
 
 
+pub struct Publisher;
+
+impl Publisher {
+    
+}
+
 
 pub struct DataWriter<'a, T> where T : TopicType<'a> {
     pub(crate) connector: &'a Connector,
