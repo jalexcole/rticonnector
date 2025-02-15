@@ -6,6 +6,7 @@
 //! The ideals of this library is to provide a Rust interface to the C library
 //! without exposing any unsafe code,and nothing more.
 
+use core::panic;
 use std::ffi::CString;
 use std::ffi::{c_char, c_double, c_int, c_void, CStr};
 use std::ptr;
@@ -43,7 +44,7 @@ impl Default for RTIOptions {
 }
 
 pub struct Connector {
-    connector: Option<*mut RTI_Connector>,
+    connector: *mut RTI_Connector,
 }
 
 impl Connector {
@@ -68,15 +69,13 @@ impl Connector {
                 rti_options.as_ptr(),
             )
         };
-        Self {
-            connector: Some(connector),
-        }
+        Self { connector }
     }
 
     /// Safe wrapper for `RTI_Connector_get_sample_count`
     pub fn get_sample_count(&self, entity_name: &str) -> Result<f64, &'static str> {
         // Ensure the connector pointer is not null
-        if self.connector.unwrap().is_null() {
+        if self.connector.is_null() {
             return Err("Null pointer: RTI Connector instance does not exist.");
         }
 
@@ -89,7 +88,7 @@ impl Connector {
         // Call the unsafe FFI function
         let result = unsafe {
             RTI_Connector_get_sample_count(
-                self.connector.unwrap() as *mut c_void,
+                self.connector as *mut c_void,
                 c_entity_name.as_ptr(),
                 &mut sample_count,
             )
@@ -118,10 +117,10 @@ impl Connector {
         // Call the unsafe FFI function
         let result = unsafe {
             RTI_Connector_get_boolean_from_infos(
-                self.connector.unwrap() as *mut c_void,
+                self.connector as *mut c_void,
                 &mut return_value,
                 c_entity_name.as_ptr(),
-                index as i32,
+                index as c_int,
                 c_field_name.as_ptr(),
             )
         };
@@ -140,21 +139,22 @@ impl Connector {
     }
 
     pub fn set_json_instance(&mut self, entity_name: &str, json: &str) -> Result<(), String> {
-        match self.connector {
-            Some(connector) => unsafe {
-                let response = RTI_Connector_set_json_instance(
-                    connector as *mut c_void,
-                    CString::new(entity_name).unwrap().as_ptr(),
-                    CString::new(json).unwrap().as_ptr(),
-                );
+        if self.connector.is_null() {
+            return Err("Connector has been closed".to_string());
+        }
 
-                if response == 0 {
-                    Ok(())
-                } else {
-                    Err("Failed to set json instance".to_string())
-                }
-            },
-            None => Err("Connector has been closed".to_string()),
+        let response = unsafe {
+            RTI_Connector_set_json_instance(
+                self.connector as *mut c_void,
+                CString::new(entity_name).unwrap().as_ptr(),
+                CString::new(json).unwrap().as_ptr(),
+            )
+        };
+
+        if response == 0 {
+            Ok(())
+        } else {
+            Err("Failed to set json instance".to_string())
         }
     }
 
@@ -166,7 +166,11 @@ impl Connector {
         value: bool,
     ) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert Rust strings to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -201,7 +205,11 @@ impl Connector {
         value: f64,
     ) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert Rust strings to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -233,7 +241,10 @@ impl Connector {
         value: &str,
     ) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+        let connector_ptr = self.connector;
 
         // Convert Rust strings to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -266,7 +277,11 @@ impl Connector {
         field_name: &str,
     ) -> Result<String, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert Rust strings to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -310,7 +325,11 @@ impl Connector {
         index: usize,
     ) -> Result<String, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name to a C string
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -353,7 +372,11 @@ impl Connector {
         member_name: &str,
     ) -> Result<String, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert Rust strings to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -393,7 +416,11 @@ impl Connector {
     /// Safe wrapper for `RTI_Connector_clear`
     pub fn clear(&self, entity_name: &str) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name to a C string
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -413,7 +440,11 @@ impl Connector {
     /// Safe wrapper for `RTI_Connector_read`
     pub fn read(&self, entity_name: &str) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name to a C string
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -433,7 +464,11 @@ impl Connector {
     /// Safe wrapper for `RTI_Connector_take`
     pub fn take(&self, entity_name: &str) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name to a C string
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -453,7 +488,11 @@ impl Connector {
     /// Safe wrapper for `RTI_Connector_write`
     pub fn write(&self, entity_name: &str, params_json: &str) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name and JSON string to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -477,24 +516,26 @@ impl Connector {
     }
 
     fn delete(&mut self) {
-        match self.connector {
-            None => (),
-            Some(connector) => {
-                unsafe { RTI_Connector_delete(connector) };
-                self.connector = None;
-            }
+        if self.connector.is_null() {
+            panic!("Attempted to delete an already invalid connector");
         }
+
+        unsafe { RTI_Connector_delete(self.connector) }
     }
 
     /// Safe wrapper for `RTI_Connector_get_number_from_sample`
     pub fn get_number_from_sample(
-        &self,
+        &mut self,
         entity_name: &str,
         index: i32,
         field_name: &str,
     ) -> Result<f64, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name and field name to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -524,13 +565,17 @@ impl Connector {
 
     /// Safe wrapper for `RTI_Connector_get_boolean_from_sample`
     pub fn get_boolean_from_sample(
-        &self,
+        &mut self,
         entity_name: &str,
         index: i32,
         field_name: &str,
     ) -> Result<bool, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name and field name to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -561,13 +606,17 @@ impl Connector {
 
     /// Safe wrapper for `RTI_Connector_get_string_from_sample`
     pub fn get_string_from_sample(
-        &self,
+        &mut self,
         entity_name: &str,
         index: i32,
         field_name: &str,
     ) -> Result<String, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name and field name to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -609,7 +658,11 @@ impl Connector {
     /// Safe wrapper for `RTI_Connector_clear_member`
     pub fn clear_member(&self, entity_name: &str, member_name: &str) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self.connector.ok_or(ConnectorError::NullPointer)?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        let connector_ptr = self.connector;
 
         // Convert the entity name and member name to C strings
         let c_entity_name = CString::new(entity_name).map_err(|_| ConnectorError::NullPointer)?;
@@ -632,73 +685,57 @@ impl Connector {
         Ok(())
     }
 
-    pub fn get_datareader(&self, entity_name: &str) -> Result<DynamicDataReader, String> {
-        match self.connector {
-            Some(connector) => unsafe {
-                let data_reader = RTI_Connector_get_datareader(
-                    connector as *mut c_void,
-                    CString::new(entity_name).unwrap().as_ptr(),
-                );
-                if data_reader.is_null() {
-                    Err("Data reader not found".to_string())
-                } else {
-                    Ok(DynamicDataReader {
-                        connector: &self,
-                        data_reader,
-                    })
-                }
-            },
-            None => Err("Connector not initialized".to_string()),
+    pub fn get_dynamic_datareader(
+        &self,
+        entity_name: &str,
+    ) -> Result<DynamicDataReader, ConnectorError> {
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
         }
-    }
 
-    /// Safe wrapper for `RTI_Connector_get_datawriter`
-    pub fn get_datawriter(&self, entity_name: &str) -> Result<DynamicDataWriter, &'static str> {
-        // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self
-            .connector
-            .ok_or("Null pointer: RTI Connector instance does not exist.")?;
+        let connector_ptr = self.connector;
 
-        // Convert the entity name to a C string
-        let c_entity_name = CString::new(entity_name).map_err(|_| "Failed to create C string.")?;
-
-        // Call the unsafe FFI function
-        let datawriter_ptr = unsafe {
-            RTI_Connector_get_datawriter(connector_ptr as *mut c_void, c_entity_name.as_ptr())
+        let data_reader = unsafe {
+            RTI_Connector_get_datareader(
+                self.connector as *mut c_void,
+                CString::new(entity_name).unwrap().as_ptr(),
+            )
         };
-
-        // Check if the returned pointer is null
-        if datawriter_ptr.is_null() {
-            return Err("Failed to retrieve datawriter: returned null pointer.");
+        if data_reader.is_null() {
+            return Err(ConnectorError::NullPointer);
+        } else {
+            Ok(DynamicDataReader {
+                connector: &self,
+                data_reader,
+            })
         }
-
-        Ok(DynamicDataWriter {
-            connector: self,
-            data_writer: datawriter_ptr,
-        })
     }
 
     /// Safe wrapper for `RTI_Connector_get_datawriter`
     pub fn get_dynamic_datawriter(
-        &self,
+        &mut self,
         entity_name: &str,
-    ) -> Result<DynamicDataWriter, &'static str> {
+    ) -> Result<DynamicDataWriter, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self
-            .connector
-            .ok_or("Null pointer: RTI Connector instance does not exist.")?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        // let connector_ptr = self
+        //     .connector
+        //     .ok_or("Null pointer: RTI Connector instance does not exist.")?;
 
         // Convert the entity name to a C string
-        let c_entity_name = CString::new(entity_name).map_err(|_| "Failed to create C string.")?;
+        let c_entity_name = CString::new(entity_name).map_err(|_| "Failed to create C string.");
 
         // Call the unsafe FFI function
         let datawriter_ptr = unsafe {
-            RTI_Connector_get_datawriter(connector_ptr as *mut c_void, c_entity_name.as_ptr())
+            RTI_Connector_get_datawriter(self.connector as *mut c_void, c_entity_name.unwrap().as_ptr())
         };
 
         // Check if the returned pointer is null
         if datawriter_ptr.is_null() {
-            return Err("Failed to retrieve datawriter: returned null pointer.");
+            return Err(ConnectorError::NullPointer);
         }
 
         Ok(DynamicDataWriter {
@@ -712,62 +749,71 @@ impl Connector {
         &self,
         entity_name: &str,
         index: usize,
-    ) -> Result<*const c_void, &'static str> {
+    ) -> Result<*const c_void, ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self
-            .connector
-            .ok_or("Null pointer: RTI Connector instance does not exist.")?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+
+        // let connector_ptr = self
+        //     .connector
+        //     .ok_or("Null pointer: RTI Connector instance does not exist.")?;
 
         // Convert the entity name to a C string
-        let c_entity_name = CString::new(entity_name).map_err(|_| "Failed to create C string.")?;
+        let c_entity_name = CString::new(entity_name).map_err(|_| "Failed to create C string.");
 
         // Call the unsafe FFI function
         let sample_ptr = unsafe {
             RTI_Connector_get_native_sample(
-                connector_ptr as *mut c_void,
-                c_entity_name.as_ptr(),
+                self.connector as *mut c_void,
+                c_entity_name.unwrap().as_ptr(),
                 index as c_int,
             )
         };
 
         // Check if the returned pointer is null
         if sample_ptr.is_null() {
-            return Err("Failed to retrieve native sample: returned null pointer.");
+            return Err(ConnectorError::SampleNotFound);
         }
 
         Ok(sample_ptr)
     }
 
-    pub fn wait_fo_data(&self, timeout: Duration) -> Result<i32, ConnectorError> {
-       let connector_ptr: *mut c_void = self.connector.unwrap() as *mut c_void;
+    pub fn wait_fo_data(&mut self, timeout: Duration) -> Result<u32, ConnectorError> {
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
         let result = unsafe {
-            RTI_Connector_wait_for_data_on_reader(connector_ptr, timeout.as_millis() as c_int)
+            RTI_Connector_wait_for_data_on_reader(self.connector as *mut c_void, timeout.as_millis() as c_int)
         };
         if result < 0 {
             Err(ConnectorError::FfiError)
         } else {
-            Ok(result)
+            Ok(result as u32)
         }
     }
 
     /// Safe wrapper for `RTI_Connector_wait_for_data_on_reader`
-    pub fn wait_for_data_on_reader(&self, ms_timeout: Duration) -> Result<(), &'static str> {
+    pub fn wait_for_data_on_reader(&self, ms_timeout: Duration) -> Result<(), ConnectorError> {
         // Ensure the connector is not None (null pointer check)
-        let connector_ptr = self
-            .connector
-            .ok_or("Null pointer: RTI Connector instance does not exist.")?;
+        if self.connector.is_null() {
+            return Err(ConnectorError::NullPointer);
+        }
+        // let connector_ptr = self
+        //     .connector
+        //     .ok_or("Null pointer: RTI Connector instance does not exist.")?;
 
         // Call the unsafe FFI function
         let result = unsafe {
             RTI_Connector_wait_for_data_on_reader(
-                connector_ptr as *mut c_void,
+                self.connector as *mut c_void,
                 ms_timeout.as_millis() as c_int,
             )
         };
 
         // Check if the function call was successful
         if result != 0 {
-            return Err("Error waiting for data on reader.");
+            return Err(ConnectorError::SampleNotFound);
         }
 
         Ok(())
@@ -798,7 +844,7 @@ pub struct DynamicDataReader<'a> {
 
 impl DynamicDataReader<'_> {
     pub fn wait_for_data_on_reader(&self, timeout: Duration) -> Result<i32, ConnectorError> {
-       // Here we assume a similar pattern as in Connector.
+        // Here we assume a similar pattern as in Connector.
         if self.data_reader.is_null() {
             return Err(ConnectorError::NullPointer);
         }
@@ -869,8 +915,6 @@ impl DynamicDataReader<'_> {
         }
     }
 }
-
-
 
 pub struct DynamicDataWriter<'a> {
     pub(crate) connector: &'a Connector,
