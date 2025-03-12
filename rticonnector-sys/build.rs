@@ -9,18 +9,28 @@ fn main() {
         "aarch64-apple-darwin" => "lib/osx-arm64",
         "x86_64-unknown-linux-gnu" => "lib/linux-x64",
         "aarch64-unknown-linux-gnu" => "lib/linux-arm64",
+        "armv7-unknown-linux-gnueabihf" => "lib/linux-arm",
+        "armv7-unknown-linux-gnueabi" => "lib/linux-arm",
+        "armv7-unknown-linux-musleabi" => "lib/linux-arm",
+        "armv7-unknown-linux-musleabihf"=> "lib/linux-arm",
         "x86_64-pc-windows-msvc" => "lib/win-x64",
         _ => panic!("Unsupported target architecture: {}", target),
     };
 
     let bindings = bindgen::builder().header("include/rticonnextdds-connector.h").generate().expect("Unable to generate bindings");
 
+    let lib_path_absolute = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join(lib_path);
+println!("cargo:rustc-link-search=native={}", lib_path_absolute.display());
+
     // Tell Cargo where to find the dynamic libraries
-    println!("cargo:rustc-link-search=native={}", lib_path);
+    // println!("cargo:rustc-link-search=native={}", lib_path);
     println!("cargo:rustc-link-lib=nddsc");
-    println!("cargo:rustc-link-lib=libnddscore");
+    println!("cargo:rustc-link-lib=nddscore");
     println!("cargo:rustc-link-lib=rtiddsconnector");
 
+    // Set the runtime library search path for unit tests
+    println!("cargo:rustc-env=DYLD_LIBRARY_PATH={}", lib_path_absolute.display());
+    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_path_absolute.display());
     // Set the runtime library search path
     let output_dir = env::var("OUT_DIR").unwrap();
 
