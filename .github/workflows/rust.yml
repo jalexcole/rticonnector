@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Load SharedOjects
-      run: cp -r rticonnector-sys/lib/linux-x64/* /bin/
+      run: sudo cp -r rticonnector-sys/lib/linux-x64/* /bin/
     - name: Build
       run: cargo build --verbose
     - name: Run tests
