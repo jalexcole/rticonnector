@@ -18,6 +18,8 @@ jobs:
     - uses: actions/checkout@v4
     - name: Load SharedOjects
       run: sudo cp -r rticonnector-sys/lib/linux-x64/* /bin/
+    - name: Remove .cargo
+      run: rm -rf .cargo/
     - name: Build
       run: cargo build --verbose
     - name: Run tests
